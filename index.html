@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2563eb"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><title>Финансы: личные и бизнес</title>
+<style>
+:root{--bg:#f5f6f8;--c:#fff;--t:#14161a;--m:#6b7280;--l:#e5e7eb;--a:#2563eb;--g:#16a34a;--r:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1115;--c:#1a1d23;--t:#eef0f3;--m:#9aa1ad;--l:#2a2e36;--a:#5b8def;--g:#34d399;--r:#f87171;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1115;--c:#1a1d23;--t:#eef0f3;--m:#9aa1ad;--l:#2a2e36;--a:#5b8def;--g:#34d399;--r:#f87171;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--t);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:84px}
+main{max-width:640px;margin:0 auto;padding:12px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;padding:8px 12px;max-width:640px;margin:0 auto}
+.row{display:flex;gap:8px;align-items:center}.sp{justify-content:space-between}
+.seg{display:flex;background:var(--l);border-radius:10px;padding:3px;gap:3px;flex:1}
+.seg button{flex:1;border:0;background:none;color:var(--t);padding:8px 4px;border-radius:8px;font:inherit;font-size:14px}
+.seg button.on{background:var(--c);font-weight:600;box-shadow:0 1px 2px #0002}
+.card{background:var(--c);border-radius:16px;padding:14px;margin:10px 0}
+.big{font-size:28px;font-weight:700}.m{color:var(--m);font-size:13px}.g{color:var(--g)}.r{color:var(--r)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid .card{margin:0}
+.btn{border:0;border-radius:12px;padding:12px;font:inherit;font-weight:600;background:var(--a);color:#fff;width:100%}
+.btn.s{background:var(--l);color:var(--t)}.btn.d{background:var(--r)}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--l);background:var(--c);color:var(--t);font:inherit;margin:4px 0 10px}
+label{font-size:13px;color:var(--m)}
+.op{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--l);gap:8px}
+.op:last-child{border:0}h3{margin:14px 0 4px;font-size:15px}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--c);border-top:1px solid var(--l);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border:0;background:none;color:var(--m);padding:12px 2px;font:inherit;font-size:12px}nav button.on{color:var(--a);font-weight:700}
+.bar{height:8px;border-radius:4px;background:var(--a);margin-top:4px}
+</style></head><body>
+<div class="top" id="top"></div><main id="v">Загрузка…</main>
+<nav id="nav"></nav>
+<script src="supabase.js"></script><script src="config.js"></script>
+<script>
+const T=['Главная','Добавить','История','Отчёты','Настройки'];
+const CAT={inc:['Зарплата','Продажи','Услуги','Подарок','Прочее'],exp:['Продукты','Транспорт','Жильё','Реклама','Налоги','Закупки','Прочее']};
+const TY={inc:'Приход',exp:'Расход',tr:'Перевод'};
+const S={acc:[],ops:[],cfg:{start:new Date().toISOString().slice(0,8)+'01'},tab:0,mon:new Date().toISOString().slice(0,7),sph:'',f:{q:'',acc:'',type:''},form:null,col:null,ok:false};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fm=k=>(k/100).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const SPN={p:'Личные',b:'Бизнес'};
+const accs=sp=>S.acc.filter(a=>!sp||a.sp===sp);
+const opAccs=o=>[o.from,o.to].filter(Boolean);
+// ---- расчёты (всё в копейках) ----
+function delta(o,id){const k=o.a;if(o.type==='inc')return o.from===id?k:0;if(o.type==='exp')return o.from===id?-k:0;return (o.to===id?k:0)-(o.from===id?k:0)}
+function bal(id,before){const a=S.acc.find(x=>x.id===id);let b=a?a.init:0;for(const o of S.ops)if(!before||o.d<before)b+=delta(o,id);return b}
+function mrange(){const s=S.mon+'-01',d=new Date(S.mon+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()+1);return[s,d.toISOString().slice(0,10)]}
+function sums(sp){const[s,e]=mrange(),r={ic:0,in:0,ec:0,en:0};const type=id=>(S.acc.find(a=>a.id===id)||{}).t;
+for(const o of S.ops){if(o.d<s||o.d>=e||(sp&&o.sp!==sp))continue;const c=type(o.from)==='card';
+if(o.type==='inc')r[c?'ic':'in']+=o.a;if(o.type==='exp')r[c?'ec':'en']+=o.a}return r}
+function totals(sp){const[s,e]=mrange(),L=accs(sp);let open=0,end=0;const rows=L.map(a=>{const o=bal(a.id,s),n=bal(a.id,e);open+=o;end+=n;return{a,o,n}});return{open,end,rows}}
+// ---- данные ----
+// ---- UI ----
+function draw(err){
+$('#nav').innerHTML=T.map((t,i)=>`<button class="${S.tab===i?'on':''}" onclick="go(${i})">${t}</button>`).join('');
+const mn=new Date(S.mon+'-01T00:00:00Z').toLocaleDateString('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'});
+$('#top').innerHTML=`<div class="row sp"><button class="btn s" style="width:48px" onclick="sh(-1)">‹</button><b style="text-transform:capitalize">${mn}</b><button class="btn s" style="width:48px" onclick="sh(1)">›</button></div>
+<div class="row" style="margin-top:8px"><div class="seg">${[['','Все'],['p','Личные'],['b','Бизнес']].map(([v,l])=>`<button class="${S.sph===v?'on':''}" onclick="S.sph='${v}';draw()">${l}</button>`).join('')}</div></div><div id="nb" class="m" style="margin-top:6px;font-size:13px"></div>`;
+const v=$('#v');if(err){v.innerHTML='<div class="card r">Ошибка базы: '+esc(err)+'</div>';return}
+v.innerHTML=[home,form,hist,rep,set][S.tab]();nbar()}
+function go(i,f){S.tab=i;if(f!==undefined)S.form=f;scrollTo(0,0);draw()}
+function sh(n){const d=new Date(S.mon+'-01T00:00:00Z');d.setUTCMonth(d.getUTCMonth()+n);S.mon=d.toISOString().slice(0,7);draw()}
+function card(l,v,c=''){return`<div class="card"><div class="m">${l}</div><div class="${c}" style="font-weight:700;font-size:18px">${v}</div></div>`}
+function block(sp,title){const r=sums(sp),t=totals(sp);
+return`${title?`<h3>${title}</h3>`:''}<div class="card"><div class="m">Остаток на конец месяца</div><div class="big">${fm(t.end)}</div><div class="m">на начало: ${fm(t.open)}</div></div>
+<div class="grid">${card('Приход на карты',fm(r.ic),'g')}${card('Приход наличными',fm(r.in),'g')}${card('Расход с карт',fm(r.ec),'r')}${card('Расход наличными',fm(r.en),'r')}${card('Общий приход',fm(r.ic+r.in),'g')}${card('Общий расход',fm(r.ec+r.en),'r')}</div>
+${grp(t,sp,'card','Карты')}${grp(t,sp,'cash','Наличные')}`}
+function grp(t,sp,ty,l){const R=t.rows.filter(x=>x.a.t===ty),n=R.reduce((a,x)=>a+x.n,0),o=R.reduce((a,x)=>a+x.o,0);
+return`<div class="card"><div class="row sp"><b>${l}</b><b>${fm(n)}</b></div><div class="m">на начало месяца: ${fm(o)}</div>${R.map(x=>`<div class="op"><span>${esc(x.a.n)}${sp?'':' <span class="m">· '+SPN[x.a.sp]+'</span>'}</span><b>${fm(x.n)}</b></div>`).join('')||'<span class="m">Нет счетов этого типа — добавьте в «Настройках»</span>'}</div>`}
+function home(){if(!S.ok)return'Загрузка…';
+return`<div class="acts"><button class="btn" style="background:var(--g)" onclick="go(1,{type:'inc'})">+ Приход</button><button class="btn d" onclick="go(1,{type:'exp'})">− Расход</button><button class="btn" onclick="go(1,{type:'tr'})">⇄ Перевод</button></div>`+
+(S.sph?block(S.sph,''):block('','Все сферы (по сферам — ниже)')+block('p','Личные финансы')+block('b','Бизнес'))}
+function form(){const f=S.form||(S.form={type:'exp'});const sp=f.sp||S.sph||'p',L=accs(sp);
+const so=(arr,sel,ph)=>`<option value="">${ph}</option>`+arr.map(x=>`<option value="${x.id||x}" ${(x.id||x)===sel?'selected':''}>${esc(x.n||x)}</option>`).join('');
+return`<div class="card"><div class="seg">${['inc','exp','tr'].map(t=>`<button class="${f.type===t?'on':''}" onclick="S.form={...rd(),type:'${t}'};draw()">${TY[t]}</button>`).join('')}</div><br>
+<label>Сфера</label><div class="seg" style="margin:4px 0 10px">${['p','b'].map(s=>`<button class="${sp===s?'on':''}" onclick="S.form={...rd(),sp:'${s}',from:'',to:''};draw()">${SPN[s]}</button>`).join('')}</div>
+<label>Сумма, ₽</label><input id="fa" inputmode="decimal" placeholder="0,00" value="${f.a?f.a/100:''}">
+<label>Дата</label><input id="fd" type="date" value="${f.d||new Date().toISOString().slice(0,10)}">
+<label>${f.type==='tr'?'Со счёта':'Счёт'}</label><select id="ff">${so(L,f.from,'Выберите счёт')}</select>
+${f.type==='tr'?`<label>На счёт</label><select id="ft">${so(L,f.to,'Выберите счёт')}</select>`:`<label>Категория</label><select id="fc">${so(CAT[f.type],f.c,'Выберите категорию')}</select>`}
+<label>Комментарий</label><input id="fm" value="${esc(f.m||'')}" placeholder="необязательно">
+<div id="fe" class="r" style="margin-bottom:8px"></div><button class="btn" onclick="save()">Сохранить</button>
+${f.id?`<button class="btn d" style="margin-top:8px" onclick="del('${f.id}')">Удалить</button>`:''}</div>`}
+function rd(){const g=i=>($('#'+i)||{}).value;const f=S.form||{};return{...f,a:Math.round(parseFloat((g('fa')||'').replace(',','.'))*100)||0,d:g('fd'),from:g('ff'),to:g('ft'),c:g('fc'),m:g('fm')}}
+async function save(){const f=rd(),er=[];f.sp=f.sp||S.sph||'p';
+if(!(f.a>0))er.push('Сумма должна быть больше нуля');if(!f.d)er.push('Укажите дату');else if(f.d<S.cfg.start)er.push('Дата раньше начала учёта ('+S.cfg.start+')');
+if(!f.from)er.push('Выберите счёт');if(f.type==='tr'){if(!f.to)er.push('Выберите счёт-получатель');else if(f.to===f.from)er.push('Счета должны различаться')}else if(!f.c)er.push('Выберите категорию');
+if(er.length){$('#fe').textContent=er.join('. ');return}
+const id=f.id||'o'+uid();await put(id,{k:'op',type:f.type,sp:f.sp,a:f.a,d:f.d,from:f.from,to:f.type==='tr'?f.to:'',c:f.type==='tr'?'':f.c,m:f.m||'',ts:f.ts||Date.now()});S.form=null;go(2)}
+async function del(id){if(confirm('Удалить операцию? Остатки будут пересчитаны.')){await rm(id);S.form=null;go(2)}}
+function hist(){const[s,e]=mrange(),q=S.f.q.toLowerCase(),nm=id=>(S.acc.find(a=>a.id===id)||{n:'—'}).n;
+const L=S.ops.filter(o=>o.d>=s&&o.d<e&&(!S.sph||o.sp===S.sph)&&(!S.f.acc||opAccs(o).includes(S.f.acc))&&(!S.f.type||o.type===S.f.type)&&(!q||(o.m+o.c+nm(o.from)).toLowerCase().includes(q)));
+let h=`<div class="card"><input placeholder="Поиск" value="${esc(S.f.q)}" oninput="S.f.q=this.value;hl()" id="sq"><div class="row"><select onchange="S.f.acc=this.value;draw()"><option value="">Все счета</option>${accs(S.sph).map(a=>`<option value="${a.id}" ${S.f.acc===a.id?'selected':''}>${esc(a.n)}</option>`).join('')}</select><select onchange="S.f.type=this.value;draw()"><option value="">Все типы</option>${Object.entries(TY).map(([k,v])=>`<option value="${k}" ${S.f.type===k?'selected':''}>${v}</option>`).join('')}</select></div></div><div id="hl">`;return h+hlist(L,nm)+'</div>'}
+function hlist(L,nm){let d='',h='<div class="card">';for(const o of L){if(o.d!==d){d=o.d;h+=`<div class="m" style="margin-top:8px">${new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}</div>`}
+const c=o.type==='inc'?'g':o.type==='exp'?'r':'';h+=`<div class="op" onclick="go(1,S.ops.find(x=>x.id==='${o.id}'))"><span>${esc(o.type==='tr'?nm(o.from)+' → '+nm(o.to):o.c)}<br><span class="m">${esc(o.m)} ${S.sph?'':SPN[o.sp]}</span></span><b class="${c}">${o.type==='inc'?'+':o.type==='exp'?'−':''}${fm(o.a)}</b></div>`}
+return h+(L.length?'':'<span class="m">Операций нет</span>')+'</div>'}
+function hl(){const x=$('#sq').selectionStart;draw();const i=$('#sq');i.focus();i.setSelectionRange(x,x)}
+function rep(){const[s,e]=mrange();const one=sp=>{const O=S.ops.filter(o=>o.d>=s&&o.d<e&&o.sp===sp),sm=t=>O.filter(o=>o.type===t).reduce((a,o)=>a+o.a,0),by={};
+O.filter(o=>o.type==='exp').forEach(o=>by[o.c]=(by[o.c]||0)+o.a);const ex=sm('exp'),mx=Math.max(1,...Object.values(by));
+return`<h3>${SPN[sp]}</h3><div class="card"><div class="op"><span>Приход</span><b class="g">${fm(sm('inc'))}</b></div><div class="op"><span>Расход</span><b class="r">${fm(ex)}</b></div><div class="op"><span>Итог</span><b>${fm(sm('inc')-ex)}</b></div><div class="m">Переводы не включены</div>
+${Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`<div style="margin-top:10px"><div class="row sp"><span>${esc(c)}</span><span>${fm(v)}</span></div><div class="bar" style="width:${v/mx*100}%"></div></div>`).join('')}</div>`};
+return(S.sph?one(S.sph):one('p')+one('b'))+`<button class="btn s" onclick="csv()">Выгрузить историю в CSV (для Excel)</button>`}
+function set(){return`<div class="card"><label>Дата начала учёта (начальные остатки действуют на неё)</label><input type="date" id="sd" value="${S.cfg.start}" onchange="put('cfg',{k:'cfg',start:this.value})"></div>
+<h3>Счета</h3>${S.acc.map(a=>`<div class="card"><div class="row sp"><b>${esc(a.n)}</b><span class="m">${a.t==='card'?'Карта':'Наличные'} · ${SPN[a.sp]}</span></div><div class="m">Начальный остаток: ${fm(a.init)}</div><div class="row" style="margin-top:8px"><button class="btn s" onclick="ea('${a.id}')">Изменить</button><button class="btn s" onclick="da('${a.id}')">Удалить</button></div></div>`).join('')}
+<div class="card" id="af"><b>Новый счёт</b><br><br><input id="an" placeholder="Название"><select id="at"><option value="card">Карта</option><option value="cash">Наличные</option></select><select id="as"><option value="p">Личные</option><option value="b">Бизнес</option></select><input id="ai" inputmode="decimal" placeholder="Начальный остаток, ₽"><div id="ae" class="r"></div><button class="btn" onclick="sa()">Добавить счёт</button></div>
+${acct()}<h3>Резервная копия</h3><div class="card"><p class="m">Данные хранятся только в этом браузере. Если очистить данные сайта или сменить телефон, без копии всё пропадёт. Делайте копию регулярно.</p><button class="btn s" onclick="bk()">Скачать копию (JSON)</button><input type="file" id="bf" accept=".json" style="display:none" onchange="rs(this.files[0])"><button class="btn s" style="margin-top:8px" onclick="$('#bf').click()">Восстановить из копии</button></div>`}
+let eid='';
+function ea(id){const a=S.acc.find(x=>x.id===id);eid=id;$('#an').value=a.n;$('#at').value=a.t;$('#as').value=a.sp;$('#ai').value=a.init/100;$('#af').scrollIntoView()}
+async function sa(){const n=$('#an').value.trim(),i=$('#ai').value.trim()===''?0:Math.round(parseFloat($('#ai').value.replace(',','.'))*100);
+if(!n||isNaN(i)){$('#ae').textContent='Укажите название и корректный остаток';return}
+const id=eid||'a'+uid();await put(id,{k:'acc',n,t:$('#at').value,sp:$('#as').value,init:i});eid=''}
+async function da(id){if(S.ops.some(o=>opAccs(o).includes(id))){alert('У счёта есть операции — сначала удалите или перенесите их');return}
+if(confirm('Удалить счёт?'))rm(id)}
+let DB;
+const idb=()=>new Promise((ok,no)=>{const r=indexedDB.open('fin',1);r.onupgradeneeded=()=>r.result.createObjectStore('d',{keyPath:'id'});r.onsuccess=()=>{r.result.onversionchange=()=>r.result.close();ok(r.result)};r.onerror=()=>no(r.error)});
+const tx=(m,f)=>new Promise((ok,no)=>{const t=DB.transaction('d',m),r=f(t.objectStore('d'));t.oncomplete=()=>ok(r.result);t.onerror=()=>no(t.error);t.onabort=()=>no(t.error||new Error('IndexedDB: транзакция отменена'))});
+async function load(){const all=await tx('readonly',s=>s.getAll());S.acc=[];S.ops=[];for(const x of all){if(x._del)continue;if(x.k==='acc'&&x.n&&Number.isFinite(x.init))S.acc.push(x);else if(x.k==='op'&&typeof x.d==='string'&&Number.isFinite(x.a))S.ops.push(x);else if(x.k==='cfg'&&x.start)S.cfg={start:x.start}}S.ops.sort((a,b)=>b.d.localeCompare(a.d)||b.ts-a.ts);S.ok=true;draw()}
+async function put(id,o){await tx('readwrite',s=>s.put({...o,id,_u:new Date().toISOString(),_dirty:1}));await load();sched()}
+async function rm(id){const r=await tx('readonly',s=>s.get(id));if(r)await tx('readwrite',s=>s.put({k:r.k,id,_del:true,_u:new Date().toISOString(),_dirty:1}));await load();sched()}
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+async function bk(){dl('finance-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify((await tx('readonly',s=>s.getAll())).filter(x=>!x._del).map(({_u,_dirty,...x})=>x)),'application/json')}
+async function rs(f){if(!f)return;try{const a=JSON.parse(await f.text());if(!Array.isArray(a)||a.some(x=>!x.id||!x.k))throw 0;if(!a.length){alert('Копия пуста: восстановление отменено');return}
+if(!confirm('Заменить все текущие данные копией? Записи, которых нет в копии, будут помечены удалёнными и удалятся в облаке при синхронизации.'))return;const old=await tx('readonly',s=>s.getAll()),ids=new Set(a.map(x=>x.id)),n=new Date().toISOString();await tx('readwrite',s=>{old.forEach(x=>{if(!ids.has(x.id)&&!x._del)s.put({k:x.k,id:x.id,_del:true,_u:n,_dirty:1})});a.forEach(x=>{const{_u,_dirty,_del,...y}=x;s.put({...y,_u:n,_dirty:1})});return s.count()});await load();sched();alert('Восстановлено')}catch(e){alert('Файл не похож на копию этого приложения')}}
+function csv(){const nm=id=>(S.acc.find(a=>a.id===id)||{n:''}).n,q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+const rows=[['Дата','Сфера','Тип','Сумма','Счёт','Счёт-получатель','Категория','Комментарий'],...S.ops.filter(o=>!S.sph||o.sp===S.sph).slice().reverse().map(o=>[o.d,SPN[o.sp],TY[o.type],(o.a/100).toFixed(2).replace('.',','),nm(o.from),nm(o.to),o.c,o.m])];
+dl('finance.csv','\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n'),'text/csv')}
+async function init(){try{DB=await idb();navigator.storage&&navigator.storage.persist&&navigator.storage.persist();await load();cloudInit()}catch(e){$('#v').textContent='Не удалось открыть локальную базу: '+e.message}}
+function nbar(){const e=$('#nb');if(!e)return;let t,c='m';if(!SB)t='Локальный режим · облако не настроено';else if(!navigator.onLine)t='Нет сети · данные сохраняются на устройстве';else if(!CL.uid)t='Не вошли · локальный режим';else{t='Облако: '+CL.st;c=CL.ok?'g':'m'}e.textContent=t;e.className=c}
+addEventListener('offline',nbar);addEventListener('online',nbar);
+const CFG=window.FIN_CFG||{},SB=(window.supabase&&CFG.url&&CFG.key)?supabase.createClient(CFG.url,CFG.key):null;
+const CL={uid:null,em:'',st:SB?'Вы не вошли в аккаунт':'Облако не настроено: заполните config.js',ok:false,busy:false,again:false,hold:false,t:null};
+const KINDS=['acc','op','cfg'],okR=r=>KINDS.includes(r.kind)&&r.data&&typeof r.data==='object'&&!String(r.id).startsWith('_probe'),nowI=()=>new Date().toISOString(),TT=r=>Date.parse(r)||0,FR='finance_records';
+const canon=d=>JSON.stringify(Object.fromEntries(Object.entries(d).sort(([a],[b])=>a<b?-1:a>b?1:0)));
+const toR=x=>{const{id,k,_u,_dirty,...d}=x;return{user_id:CL.uid,id,kind:k,data:d,updated_at:_u||nowI()}};
+const fromR=r=>({...r.data,k:r.kind,id:r.id,_u:r.updated_at});
+function cst(t,ok){CL.st=t;CL.ok=!!ok;const e=$('#cs');if(e){e.textContent=t;e.className=ok?'g':'m'}nbar()}
+function sched(){if(SB&&CL.uid){clearTimeout(CL.t);CL.t=setTimeout(sync,1500)}}
+async function fetchAll(){let a=[],f=0;for(;;){const{data,error}=await SB.from(FR).select('*').eq('user_id',CL.uid).in('kind',KINDS).order('id').range(f,f+999);if(error)throw error;a=a.concat(data);if(data.length<1000)break;f+=1000}return a.filter(okR)}
+function sync(m){if(navigator.locks&&navigator.locks.request)return navigator.locks.request('fin-sync',{ifAvailable:true},lk=>{if(lk)return syncRun(m);sched()});return syncRun(m)}
+async function syncRun(manual){
+if(!SB||!CL.uid)return;if(CL.busy){CL.again=true;return}if(manual===true)CL.hold=false;if(CL.hold)return;if(!navigator.onLine)return cst('Нет сети: изменения сохранены на устройстве и отправятся при подключении',false);CL.busy=true;
+try{cst('Синхронизация…');
+const rem=await fetchAll();let loc=await tx('readonly',s=>s.getAll());const bound=localStorage.getItem('fin_uid');
+let La=loc.filter(x=>!x._del);const Ra=rem.filter(r=>!(r.data&&r.data._del));
+if(bound&&bound!==CL.uid){
+if(La.length){if(!confirm('Локальные данные на этом устройстве принадлежат другому аккаунту, автоматически объединять их нельзя.\n\nОК — скачать копию локальных данных и заменить их данными этого аккаунта.\nОтмена — остаться без синхронизации.')){CL.hold=true;return cst('Синхронизация отключена: на устройстве данные другого аккаунта',false)}await bk()}
+await tx('readwrite',s=>s.clear());loc=[];La=[];localStorage.setItem('fin_uid',CL.uid);await load()}
+else if(!bound){
+if(La.length||Ra.length){const ids=new Set(Ra.map(r=>r.id)),both=La.filter(x=>ids.has(x.id)).length,c=(a,k)=>a.filter(x=>(x.k||x.kind)===k).length;
+if(La.length&&confirm('Перед первой синхронизацией скачать резервную копию локальных данных?'))await bk();
+if(!confirm('Первая синхронизация.\nНа устройстве: счетов '+c(La,'acc')+', операций '+c(La,'op')+'.\nВ облаке: счетов '+c(Ra,'acc')+', операций '+c(Ra,'op')+'.\nСовпадающих записей: '+both+' (побеждает более поздняя правка).\nДанные будут объединены, ничего не удаляется. Продолжить?')){CL.hold=true;return cst('Первая синхронизация отменена',false)}}
+localStorage.setItem('fin_uid',CL.uid)}
+const rmap=new Map(rem.map(r=>[r.id,r])),lmap=new Set(loc.map(x=>x.id)),up=[],dn=[];
+for(const x of loc){if(!KINDS.includes(x.k))continue;const r=rmap.get(x.id);if(!r){up.push(x);continue}const rt=TT(r.updated_at),lt=TT(x._u);if(x._dirty&&lt>=rt)up.push(x);else if(rt>lt)dn.push(r)}
+for(const r of rem)if(!lmap.has(r.id))dn.push(r);
+if(dn.length)await tx('readwrite',s=>{dn.forEach(r=>{s.get(r.id).onsuccess=e=>{const c=e.target.result;if(!c||!(c._dirty&&TT(c._u)>=TT(r.updated_at)))s.put(fromR(r))}});return s.count()});
+let ok=0,bad=0;
+for(let i=0;i<up.length;i+=200){const ch=up.slice(i,i+200),rows=ch.map(toR),pu=new Map(ch.map(x=>[x.id,x._u]));
+const w=await SB.from(FR).upsert(rows,{onConflict:'user_id,id'});if(w.error)throw w.error;
+const b=await SB.from(FR).select('id,data,updated_at').eq('user_id',CL.uid).in('id',rows.map(r=>r.id));if(b.error)throw b.error;
+const bm=new Map(b.data.map(r=>[r.id,r])),good=new Map();
+for(const r of rows){const x=bm.get(r.id);if(x&&canon(x.data)===canon(r.data)){ok++;good.set(r.id,x.updated_at)}else bad++}
+await tx('readwrite',s=>{good.forEach((u,id)=>{s.get(id).onsuccess=e=>{const c=e.target.result;if(c&&c._u===pu.get(id)){const n={...c,_u:u};delete n._dirty;s.put(n)}}});return s.count()})}
+if(bad)throw new Error('проверка записи не пройдена, не совпало записей: '+bad);
+await load();const tm=new Date().toLocaleTimeString('ru-RU');
+cst(up.length?'Синхронизировано '+tm+': отправлено и подтверждено чтением '+ok+', получено '+dn.length:'Синхронизировано '+tm+': получено '+dn.length+', отправлять нечего',true)}
+catch(e){cst('Ошибка синхронизации: '+(e.message||e),false)}
+finally{CL.busy=false;if(CL.again){CL.again=false;sched()}}}
+async function probe(){if(!SB||!CL.uid)return;if(CL.busy)return cst('Дождитесь окончания синхронизации',false);CL.busy=true;
+const id='_probe_'+Date.now().toString(36),v={_probe:1,t:Date.now(),r:Math.random()};let st='',ok=false;cst('Тест…');
+try{const w=await SB.from(FR).upsert({user_id:CL.uid,id,kind:'cfg',data:v,updated_at:nowI()},{onConflict:'user_id,id'});if(w.error)throw w.error;
+const r=await SB.from(FR).select('data').eq('user_id',CL.uid).eq('id',id).single();if(r.error)throw r.error;
+if(!(r.data.data.t===v.t&&r.data.data.r===v.r))throw new Error('прочитано не то, что записано');
+const d=await SB.from(FR).delete().eq('user_id',CL.uid).eq('id',id);if(d.error)throw d.error;
+const c=await SB.from(FR).select('id').eq('user_id',CL.uid).eq('id',id);if(c.error)throw c.error;
+if(c.data.length)throw new Error('тестовая запись не удалилась');ok=true;st='Тест пройден '+new Date().toLocaleTimeString('ru-RU')+': запись, чтение и удаление тестовой записи выполнены'}
+catch(e){st='Тест не пройден: '+(e.message||e);try{await SB.from(FR).delete().eq('user_id',CL.uid).eq('id',id)}catch(_){}}
+finally{CL.busy=false}cst(st,ok)}
+async function lg(reg){try{await lg0(reg)}catch(e){cst('Ошибка: '+(e.message||e),false)}}
+async function lg0(reg){const em=$('#le').value.trim(),pw=$('#lp').value;if(!em||pw.length<8)return cst('Укажите e-mail и пароль от 8 символов',false);
+cst(reg?'Регистрация…':'Вход…');const r=reg?await SB.auth.signUp({email:em,password:pw,options:{emailRedirectTo:location.origin+location.pathname}}):await SB.auth.signInWithPassword({email:em,password:pw});
+if(r.error)return cst('Ошибка: '+r.error.message,false);if(reg&&!r.data.session)cst('Письмо отправлено: подтвердите e-mail по ссылке, затем войдите',false)}
+async function lo(){await SB.auth.signOut()}
+async function lw(){const n=(await tx('readonly',s=>s.getAll())).filter(x=>x._dirty).length;
+if(!confirm('Выйти и стереть все данные на этом устройстве? Не отправленных в облако записей: '+n+' — они будут потеряны. Сначала скачается резервная копия.'))return;
+await bk();await SB.auth.signOut();await tx('readwrite',s=>s.clear());localStorage.removeItem('fin_uid');await load()}
+function acct(){if(!SB)return'<h3>Аккаунт</h3><div class="card"><p class="m">Облако не настроено: заполните config.js (адрес проекта и publishable key). Локальный режим работает.</p></div>';
+return'<h3>Аккаунт</h3><div class="card">'+(CL.uid?`<b>${esc(CL.em)}</b><div id="cs" class="${CL.ok?'g':'m'}" style="margin:6px 0 10px">${esc(CL.st)}</div><button class="btn" onclick="sync(true)">Синхронизировать</button><button class="btn s" style="margin-top:8px" onclick="probe()">Проверить синхронизацию</button><button class="btn s" style="margin-top:8px" onclick="lo()">Выйти (данные останутся на устройстве)</button><button class="btn s" style="margin-top:8px" onclick="lw()">Выйти и стереть данные устройства</button>`:`<input id="le" type="email" autocomplete="username" placeholder="E-mail"><input id="lp" type="password" autocomplete="current-password" placeholder="Пароль (от 8 символов)"><div id="cs" class="m" style="margin-bottom:8px">${esc(CL.st)}</div><div class="row"><button class="btn" onclick="lg(0)">Войти</button><button class="btn s" onclick="lg(1)">Регистрация</button></div>`)+'</div>'}
+function cloudInit(){if(!SB)return;
+SB.auth.onAuthStateChange((ev,ses)=>{const pu=CL.uid;CL.uid=ses?ses.user.id:null;CL.em=ses?ses.user.email:'';if(!ses||pu!==CL.uid)CL.hold=false;
+if(ses){if(ev!=='TOKEN_REFRESHED'){cst('Вход выполнен: '+CL.em,false);setTimeout(sync,0)}}else cst('Вы не вошли в аккаунт',false);
+if(S.tab===4&&ev!=='TOKEN_REFRESHED')draw()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sched()});addEventListener('online',()=>{nbar();sched()})}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+init();
+</script></body></html>
