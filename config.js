@@ -1,3 +1,3 @@
 // Вставьте publishable key из Supabase (Settings -> API Keys): sb_publishable_...
 // Секретный ключ (secret / service_role) сюда вставлять НЕЛЬЗЯ.
-window.FIN_CFG={url:'https://rgapsyhizzffdlodiolq.supabase.co',key:''};
+window.FIN_CFG={url:'https://rgapsyhizzffdlodiolq.supabase.co',key:'sb_publishable_lFhXPCKbWxZkVVjJUMj9Mw_bpOGJY6-'};
