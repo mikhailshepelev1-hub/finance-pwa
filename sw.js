@@ -1,4 +1,4 @@
-const C='fin-v3',F=['./','index.html','supabase.js','config.js','manifest.webmanifest','icon-192.png','icon-512.png'];
+const C='fin-v4',F=['./','index.html','supabase.js','config.js','manifest.webmanifest','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>Promise.allSettled(F.map(f=>c.add(f)))));self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>clients.claim())));
 // Кешируются только GET-запросы к файлам этого же сайта. Запросы к Supabase и любые чужие домены не перехватываются.
