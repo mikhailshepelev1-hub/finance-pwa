@@ -130,7 +130,7 @@ async function init(){try{DB=await idb();navigator.storage&&navigator.storage.pe
 function nbar(){const e=$('#nb');if(!e)return;let t,c='m';if(!SB)t='Локальный режим · облако не настроено';else if(!navigator.onLine)t='Нет сети · данные сохраняются на устройстве';else if(!CL.uid)t='Не вошли · локальный режим';else{t='Облако: '+CL.st;c=CL.ok?'g':'m'}e.textContent=t;e.className=c}
 addEventListener('offline',nbar);addEventListener('online',nbar);
 const CFG=window.FIN_CFG||{},SB=(window.supabase&&CFG.url&&CFG.key)?supabase.createClient(CFG.url,CFG.key):null;
-const CL={uid:null,em:'',st:SB?'Вы не вошли в аккаунт':'Облако не настроено: заполните config.js',ok:false,busy:false,again:false,hold:false,t:null};
+const CL={uid:null,em:'',st:SB?'Вы не вошли в аккаунт':'Облако не настроено: заполните config.js',ok:false,busy:false,again:false,hold:false,recovery:false,t:null};
 const KINDS=['acc','op','cfg'],okR=r=>KINDS.includes(r.kind)&&r.data&&typeof r.data==='object'&&!String(r.id).startsWith('_probe'),nowI=()=>new Date().toISOString(),TT=r=>Date.parse(r)||0,FR='finance_records';
 const canon=d=>JSON.stringify(Object.fromEntries(Object.entries(d).sort(([a],[b])=>a<b?-1:a>b?1:0)));
 const toR=x=>{const{id,k,_u,_dirty,...d}=x;return{user_id:CL.uid,id,kind:k,data:d,updated_at:_u||nowI()}};
@@ -186,11 +186,51 @@ async function lo(){await SB.auth.signOut()}
 async function lw(){const n=(await tx('readonly',s=>s.getAll())).filter(x=>x._dirty).length;
 if(!confirm('Выйти и стереть все данные на этом устройстве? Не отправленных в облако записей: '+n+' — они будут потеряны. Сначала скачается резервная копия.'))return;
 await bk();await SB.auth.signOut();await tx('readwrite',s=>s.clear());localStorage.removeItem('fin_uid');await load()}
-function acct(){if(!SB)return'<h3>Аккаунт</h3><div class="card"><p class="m">Облако не настроено: заполните config.js (адрес проекта и publishable key). Локальный режим работает.</p></div>';
+async function setNewPassword(){
+  const p=$('#rp1').value;
+  const q=$('#rp2').value;
+
+  if(p.length<8){
+    cst('Новый пароль должен содержать не менее 8 символов',false);
+    return;
+  }
+  if(p!==q){
+    cst('Пароли не совпадают',false);
+    return;
+  }
+
+  cst('Сохраняем новый пароль…',false);
+  const r=await SB.auth.updateUser({password:p});
+
+  if(r.error){
+    cst('Не удалось изменить пароль: '+r.error.message,false);
+    return;
+  }
+
+  CL.recovery=false;
+  history.replaceState({},document.title,location.pathname);
+  cst('Пароль успешно изменён',true);
+  draw();
+}
+  function acct(){if(CL.recovery)return '<h3>Новый пароль</h3><div class="card"><p class="m">Введите новый пароль для аккаунта '+esc(CL.em)+'. Минимум 8 символов.</p><label>Новый пароль</label><input id="rp1" type="password" autocomplete="new-password" placeholder="Новый пароль"><label>Повторите новый пароль</label><input id="rp2" type="password" autocomplete="new-password" placeholder="Повторите пароль"><div id="cs" class="m" style="margin:8px 0">'+esc(CL.st)+'</div><button class="btn" onclick="setNewPassword()">Сохранить новый пароль</button></div>';if(!SB)return'<h3>Аккаунт</h3><div class="card"><p class="m">Облако не настроено: заполните config.js (адрес проекта и publishable key). Локальный режим работает.</p></div>';
 return'<h3>Аккаунт</h3><div class="card">'+(CL.uid?`<b>${esc(CL.em)}</b><div id="cs" class="${CL.ok?'g':'m'}" style="margin:6px 0 10px">${esc(CL.st)}</div><button class="btn" onclick="sync(true)">Синхронизировать</button><button class="btn s" style="margin-top:8px" onclick="probe()">Проверить синхронизацию</button><button class="btn s" style="margin-top:8px" onclick="lo()">Выйти (данные останутся на устройстве)</button><button class="btn s" style="margin-top:8px" onclick="lw()">Выйти и стереть данные устройства</button>`:`<input id="le" type="email" autocomplete="username" placeholder="E-mail"><input id="lp" type="password" autocomplete="current-password" placeholder="Пароль (от 8 символов)"><div id="cs" class="m" style="margin-bottom:8px">${esc(CL.st)}</div><div class="row"><button class="btn" onclick="lg(0)">Войти</button><button class="btn s" onclick="lg(1)">Регистрация</button></div>`)+'</div>'}
 function cloudInit(){if(!SB)return;
 SB.auth.onAuthStateChange((ev,ses)=>{const pu=CL.uid;CL.uid=ses?ses.user.id:null;CL.em=ses?ses.user.email:'';if(!ses||pu!==CL.uid)CL.hold=false;
-if(ses){if(ev!=='TOKEN_REFRESHED'){cst('Вход выполнен: '+CL.em,false);setTimeout(sync,0)}}else cst('Вы не вошли в аккаунт',false);
+if(ev==='PASSWORD_RECOVERY'){
+  CL.recovery=true;
+  S.tab=4;
+  cst('Ссылка восстановления принята. Задайте новый пароль.',false);
+  draw();
+  return;
+}
+if(ses){
+  if(ev!=='TOKEN_REFRESHED'){
+    cst('Вход выполнен: '+CL.em,false);
+    setTimeout(sync,0);
+  }
+}else{
+  cst('Вы не вошли в аккаунт',false);
+}
 if(S.tab===4&&ev!=='TOKEN_REFRESHED')draw()});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)sched()});addEventListener('online',()=>{nbar();sched()})}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
